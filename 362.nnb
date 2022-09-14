@@ -1,0 +1,81 @@
+{
+    "cells": [
+        {
+            "language": "typescript",
+            "source": [
+                "function pv(cf: number[], rfRates: number[], period: number, compoundType: 'continuous') {\r\n    let pv = 0;\r\n\r\n    for (let i = 0; i < cf.length; i++) {\r\n        const fv = cf[i];\r\n        const rate = rfRates[i];\r\n        const t = period * (i + 1);\r\n        const df = {\r\n            'continuous': Math.exp(-1 * rate * t)\r\n        }[compoundType]\r\n\r\n        pv += fv * df;\r\n    }\r\n\r\n    return pv;\r\n}\r\n\r\nfunction fv(cf: number[], rfRates: number[], period: number, compoundType: 'continuous') {\r\n    let fv = 0;\r\n\r\n    for (let i = 0; i < cf.length; i++) {\r\n        const c = cf[i];\r\n        const rate = rfRates[i];\r\n        const t = period * (i + 1);\r\n        const df = {\r\n            'continuous': Math.exp(rate * t)\r\n        }[compoundType]\r\n\r\n        fv += c * df;\r\n    }\r\n\r\n    return fv;\r\n}\r\n\r\n\r\n\r\n/**\r\n * \r\n * @param spotRateHc 1 HomeCurrency: x ForeignCurrency (x is Param)\r\n */\r\nfunction forexForwardRate(spotRateHc: number, hcInterestRate: number, fcInterestRate: number, t: number) {\r\n    return (spotRateHc * Math.exp(fcInterestRate * t))/(Math.exp(hcInterestRate * t));\r\n}\r\n\r\n/**\r\n * \r\n * @param forwardRateHc 1 HomeCurrency: x ForeignCurrency (x is Param)\r\n */\r\nfunction forexSpotRate(forwardRateHc: number, hcInterestRate: number, fcInterestRate: number, t: number) {\r\n    return (forwardRateHc * Math.exp(hcInterestRate * t))/(Math.exp(fcInterestRate * t));\r\n}\r\n\r\nfunction futuresPrice(\r\n    spotPrice: number,\r\n    riskFreeRate: number,\r\n    timeInYears: number,\r\n    compoundType: 'continuous',\r\n    storageCostsRate: number = 0,\r\n    dividendYield: number = 0,\r\n    convenienceYield: number = 0,\r\n    storageCostInAdvance: number = 0\r\n): number {\r\n\r\n    // const df = {\r\n    //     'continuous': Math.exp((riskFreeRate + storageCostsRate - dividendYield - convenienceYield) * timeInYears)\r\n    // }[compoundType];\r\n    \r\n    // return (spotPrice + storageCostInAdvance) * df;\r\n\r\n    return fv([spotPrice + storageCostInAdvance], [riskFreeRate + storageCostsRate - dividendYield - convenienceYield], timeInYears, compoundType);\r\n}\r\n\r\nfunction futuresValue(\r\n    contractedPrice: number,\r\n    currentPrice: number,\r\n    riskFreeRate: number,\r\n    timeInYears: number,\r\n    compoundType: 'continuous',\r\n    position: 'long' | 'short',\r\n    contractSize: number = 1\r\n)  {\r\n    if (position === 'long') {\r\n        contractedPrice *= -1;\r\n        currentPrice *= -1;\r\n    }\r\n    \r\n    return pv([(contractedPrice - currentPrice)], [riskFreeRate], timeInYears, compoundType) * contractSize;\r\n}\r\n\r\nfunction minVarianceHedgeRatio(correlation: number, stdDevSpotPrice: number, stdDevFuturesPrice: number) {\r\n    return correlation * (stdDevSpotPrice/stdDevFuturesPrice);\r\n}\r\n\r\nfunction optimalNumFutures(ratio: number, plannedQuantity: number, contractQuantity: number) {\r\n    return ratio * (plannedQuantity/contractQuantity);\r\n}\r\n\r\nfunction duration(cf: number[], rfRates: number[], period: number, compoundType: 'continuous') {\r\n    let timeWeightedPv = 0;\r\n    let pv = 0;\r\n    for (let i = 0; i < cf.length; i++) {\r\n        const fv = cf[i];\r\n        const rate = rfRates[i];\r\n        const t = period * (i + 1);\r\n        const df = {\r\n            'continuous': Math.exp(-1 * rate * t)\r\n        }[compoundType]\r\n\r\n        timeWeightedPv += t *(fv * df);\r\n        pv += (fv*df);\r\n    }\r\n\r\n    return timeWeightedPv/pv;\r\n}\r\n\r\n/**\r\n * \r\n * @param durationIssue \r\n * @param durationHedge \r\n * @param facevalue SHOULD BE PV of bond payments (i.e. current price)\r\n * @param hedgeValue SHOULD BE PV of futures (i.e. current price)\r\n * @returns \r\n */\r\nfunction durationBasedHedgeRatio(durationIssue: number, durationHedge: number, facevalue: number, hedgeValue: number) {\r\n    return (facevalue/hedgeValue) * (durationIssue/durationHedge); \r\n}\r\n\r\nfunction bondCf(couponRate: number, facevalue: number, nPeriods: number) {\r\n    const coupons = Array(nPeriods).fill(0).map(_ => couponRate * facevalue);\r\n\r\n    coupons[nPeriods - 1] += facevalue;\r\n    return coupons;\r\n}"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "",
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "durationBasedHedgeRatio(\r\n    270/365, 90/365, 275_000_000/(1+(0.058*270/365)), 1_000_000/(1+ (0.0375*90/365))\r\n)\r\n\r\n\r\nconst durA = duration(bondCf(0.03, 25_000_000, 3), Array(3).fill(0.07), 0.5, \"continuous\")\r\n\r\ndurationBasedHedgeRatio(durA, 2.726, pv(bondCf(0.03, 25_000_000, 3), Array(3).fill(0.07), 0.5, \"continuous\"), 80645.1612903226);\r\n\r\n// futuresPrice(1050, 7.5/100, 0.5, \"continuous\");\r\n\r\n// optimalNumFutures(1.2-(-0.4), 100_000*125, futuresPrice(1050, 7.5/100, 0.5, \"continuous\") *\r\n// 1000);"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "",
+                                ""
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "items": [
+                        {
+                            "mime": "text/plain",
+                            "value": [
+                                "\u001b[33m24606855.88371898\u001b[39m"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "futuresPrice(60, 0.04, 4/12, \"continuous\", 0.02);\r\n\r\n// pv([10, 10, 10], [0.05, 0.05, 0.05], 1/12, \"continuous\");\r\n// futuresPrice(625, 0.05, 3/12, \"continuous\", 0, 0.02)\r\n\r\n// forexSpotRate(0.6835, 6.75/100, 4.5/100, 3/12);\r\n\r\n// futuresPrice(50, 0.03, 3/12, \"continuous\", 0.05,0,0.12);\r\n\r\n// futuresValue(65, 63.5, 0.05, 2/12, \"continuous\", \"long\", 1000)\r\n\r\n// futuresValue(70, 73.5, 0.04, 2/12, 'continuous', \"short\", 1000)\r\n\r\n// futuresValue(futuresPrice(40, 0.1, 1, \"continuous\"), futuresPrice(45, 0.1, 0.5, \"continuous\"), 0.1, 0.5,\"continuous\", \"long\")\r\n\r\n// optimalNumFutures(\r\n// minVarianceHedgeRatio(0.85, 22, 31),\r\n// 800, 100)\r\n\r\n// optimalNumFutures(\r\n//     0.2,\r\n//     10_000_000,\r\n//     629.37*1000\r\n// )\r\n\r\n// durationBasedHedgeRatio(0.5, 90/365, 5_000_000, 1_000_000)\r\n\r\n// const durBuy = duration(bondCf(0.07/2, 2_000_000, 4), Array(4).fill(0.07), 0.5, \"continuous\")\r\n// const durHedge = duration(bondCf(0.04, 100_000, 6), Array(6).fill(0.07), 0.5, \"continuous\");\r\n\r\n// durationBasedHedgeRatio(durBuy, durHedge, pv(bondCf(0.07/2, 2_000_000, 4), Array(4).fill(0.07), 0.5, \"continuous\"), pv(bondCf(0.04, 100_000, 6), Array(6).fill(0.07), 0.5, \"continuous\"))"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "",
+                                ""
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "items": [
+                        {
+                            "mime": "text/plain",
+                            "value": [
+                                "\u001b[33m61.21208040160535\u001b[39m"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
